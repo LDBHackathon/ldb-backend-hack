@@ -1,0 +1,38 @@
+name: ldb-dva-backend
+
+services:
+  postgres:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ldb
+      POSTGRES_PASSWORD: ldb
+      POSTGRES_DB: ldb_dva
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/data
+
+  redis:
+    image: redis:7
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+  app:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "8050:8000"
+    depends_on:
+      - postgres
+      - redis
+    volumes:
+      - ./logs:/app/logs
+
+volumes:
+  postgres_data:
+  redis_data:

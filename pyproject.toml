@@ -1,7 +1,71 @@
 [project]
 name = "ldb-backend"
 version = "0.1.0"
-description = "Add your description here"
+description = "LDB DVA Infrastructure Backend"
 readme = "README.md"
 requires-python = ">=3.14"
-dependencies = []
+dependencies = [
+    "fastapi[standard]>=0.115.12",
+    "psycopg2-binary>=2.9.10",
+    "pydantic-settings>=2.9.1",
+    "redis>=6.2.0",
+    "tortoise-orm[asyncpg]>=1.0.0",
+    "httpx>=0.28.1",
+    "structlog>=25.5.0",
+    "fastapi-limiter>=0.2.0",
+    "pyrate-limiter>=3.7.0",
+    "secure>=2.0.1",
+    "prometheus-client>=0.25.0",
+    "orjson>=3.11.7",
+    "aerich>=0.8.1",
+    "apscheduler>=3.11.0",
+]
+
+[dependency-groups]
+dev = [
+    "pyright>=1.1.408",
+    "pytest>=9.0.2",
+    "pytest-asyncio>=1.3.0",
+    "ruff>=0.11.12",
+]
+
+[tool.ruff]
+fix = true
+exclude = ["*/migrations", "test*", "*/tests"]
+
+[tool.ruff.lint]
+extend-select = ["UP", "I", "T20", "ANN", "ASYNC", "S", "ICN", "RUF", "ERA", "D"]
+ignore = ["D100", "D104"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.isort]
+case-sensitive = true
+length-sort = true
+
+[tool.pyright]
+venvPath = "."
+venv = ".venv"
+include = ["app", "tests"]
+ignore = ["app/migrations"]
+typeCheckingMode = "basic"
+
+[tool.tortoise]
+tortoise_orm = "app.config.tortoise.TORTOISE_CONFIG"
+location = "./app/migrations"
+src_folder = "./."
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+addopts = ["-v", "--tb=short", "--strict-markers", "--disable-warnings", "--color=yes"]
+markers = [
+    "slow: marks tests as slow",
+    "integration: marks tests as integration tests",
+    "unit: marks tests as unit tests",
+]
+pythonpath = ["."]
+
+[tool.setuptools]
+packages = ["app"]

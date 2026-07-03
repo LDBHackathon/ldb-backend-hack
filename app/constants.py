@@ -1,0 +1,17 @@
+NOMBA_PAYMENT_SUCCESS_EVENT = "payment_success"
+NOMBA_VACT_TRANSFER_TYPE = "vact_transfer"
+
+OUTBOUND_EVENT_PAYMENT_RECEIVED = "customer.payment_received"
+
+RECONCILIATION_CREDIT_FULL = "credit_full"
+RECONCILIATION_CREDIT_PARTIAL = "credit_partial"
+RECONCILIATION_OVERPAYMENT = "overpayment"
+RECONCILIATION_QUARANTINE = "quarantine"
+RECONCILIATION_SAFETY_NET_MATCH = "safety_net_match"
+RECONCILIATION_SAFETY_NET_MISSING = "safety_net_missing"
+
+SUSPENSE_MISDIRECTED = "misdirected"
+SUSPENSE_CLOSED_ACCOUNT = "closed_account"
+
+NOMBA_TOKEN_CACHE_KEY = "nomba:oauth:access_token"
+NOMBA_TOKEN_TTL_SECONDS = 55 * 60
