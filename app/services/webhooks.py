@@ -96,7 +96,7 @@ class NombaWebhookService:
             payload = self._build_nomba_payload(
                 request_id=generate_reference(),
                 account_number="0000000000",
-                account_ref="invalid-ref",
+                account_ref="invalid-ref-0000000001",
                 amount=body.amount,
                 sender_name=body.sender_name,
                 sender_bank=body.sender_bank,

@@ -1,5 +1,5 @@
-from fastapi import Request, status
-from fastapi_limiter.depends import RateLimiter as BaseRateLimiter
+from fastapi import Request, Response, status
+from fastapi_limiter.depends import _BaseRateLimiter
 from pyrate_limiter import Duration, InMemoryBucket, Limiter, Rate
 
 from app.integrations.cache import sync_cache_factory
@@ -10,10 +10,12 @@ from app.utils.logger import logger
 async def _default_key_generator(request: Request) -> str:
     forwarded = request.headers.get("X-Forwarded-For")
     if forwarded:
-        return forwarded.split(",")[0]
-    if request.client:
-        return request.client.host
-    return "anonymous"
+        ip = forwarded.split(",")[0]
+    elif request.client:
+        ip = request.client.host
+    else:
+        ip = "anonymous"
+    return f"{ip}:{request.method}:{request.scope['path']}"
 
 
 def _callback(*_args: object, **_kwargs: object) -> None:
@@ -44,7 +46,15 @@ def _build_limiter() -> Limiter:
         return Limiter(InMemoryBucket([Rate(70, Duration.MINUTE)]))
 
 
-RateLimiter = BaseRateLimiter(
+class CompatibleRateLimiter(_BaseRateLimiter):
+    async def __call__(self, request: Request, response: Response) -> None:
+        rate_key = await self.identifier(request)
+        success = await self.limiter.try_acquire_async(rate_key, blocking=self.blocking)
+        if not success:
+            return await self.callback(request, response)
+
+
+RateLimiter = CompatibleRateLimiter(
     limiter=_build_limiter(),
     identifier=_default_key_generator,
     callback=_callback,

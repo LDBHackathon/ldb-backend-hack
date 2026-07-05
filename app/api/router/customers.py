@@ -2,7 +2,12 @@ from http import HTTPMethod
 
 from fastapi import APIRouter, status
 
-from app.api.controller.customers import create_customer, get_customer, update_customer
+from app.api.controller.customers import (
+    create_customer,
+    get_customer,
+    link_nomba_sub_account,
+    update_customer,
+)
 from app.schemas.responses.customers import CustomerResponse
 from app.schemas.responses.generic import (
     ErrorResponseSchema,
@@ -21,6 +26,19 @@ router.add_api_route(
     responses={
         status.HTTP_409_CONFLICT: {"model": ErrorResponseSchema},
         status.HTTP_422_UNPROCESSABLE_CONTENT: {"model": ValidationErrorResponseSchema},
+        status.HTTP_502_BAD_GATEWAY: {"model": ErrorResponseSchema},
+    },
+)
+
+router.add_api_route(
+    "/{customer_id}/link-nomba-sub-account",
+    link_nomba_sub_account,
+    methods=[HTTPMethod.POST],
+    response_model=SuccessResponseSchema[CustomerResponse],
+    status_code=status.HTTP_200_OK,
+    responses={
+        status.HTTP_404_NOT_FOUND: {"model": ErrorResponseSchema},
+        status.HTTP_409_CONFLICT: {"model": ErrorResponseSchema},
         status.HTTP_502_BAD_GATEWAY: {"model": ErrorResponseSchema},
     },
 )

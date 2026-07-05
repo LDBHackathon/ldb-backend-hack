@@ -1,0 +1,142 @@
+name: Build and Deploy to DO
+
+on:
+  push:
+    branches:
+      - dev
+      - main
+  pull_request:
+    branches:
+      - dev
+      - main
+
+env:
+  DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install 3.14
+
+      - name: Install dependencies
+        run: uv sync --locked
+
+      - name: Run tests
+        run: uv run pytest -q
+
+  build:
+    needs: test
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build, tag and push (Development)
+        if: github.ref == 'refs/heads/dev'
+        run: |
+          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/ldb-dva-be-dev:latest-dev .
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/ldb-dva-be-dev:latest-dev
+
+      - name: Build, tag and push (Production)
+        if: github.ref == 'refs/heads/main'
+        run: |
+          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/ldb-dva-be:latest .
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/ldb-dva-be:latest
+
+  deploy-dev:
+    name: Deploy to Development
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
+    runs-on: ubuntu-latest
+    environment: development
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Copy compose file via SSH
+        uses: appleboy/scp-action@v1
+        with:
+          host: ${{ secrets.DO_HOST_DEV }}
+          username: ${{ secrets.DO_USER_DEV }}
+          password: ${{ secrets.DO_PASSWORD_DEV }}
+          port: 22
+          source: "docker-compose.dev.yml"
+          target: "/home/${{ secrets.DO_USER_DEV }}/"
+
+      - name: Deploy to Development (DO)
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.DO_HOST_DEV }}
+          username: ${{ secrets.DO_USER_DEV }}
+          password: ${{ secrets.DO_PASSWORD_DEV }}
+          port: 22
+          script: |
+            docker login -u ${{ secrets.DOCKERHUB_USERNAME }} -p ${{ secrets.DOCKERHUB_TOKEN }}
+            docker pull ${{ secrets.DOCKERHUB_USERNAME }}/ldb-dva-be-dev:latest-dev
+
+            sed -i "s|^\([[:space:]]*\)build:.*|\1image: ${{ secrets.DOCKERHUB_USERNAME }}/ldb-dva-be-dev:latest-dev|" docker-compose.dev.yml
+
+            docker network create ldb-dva-internal-dev || true
+
+            docker compose -f docker-compose.dev.yml down || true
+            docker compose -f docker-compose.dev.yml up -d
+
+            docker system prune -f
+
+  deploy-prod:
+    name: Deploy to Production
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Copy compose file via SSH
+        uses: appleboy/scp-action@v1
+        with:
+          host: ${{ secrets.DO_HOST_PROD }}
+          username: ${{ secrets.DO_USER_PROD }}
+          password: ${{ secrets.DO_PASSWORD_PROD }}
+          port: 22
+          source: "docker-compose.prod.yml"
+          target: "/home/${{ secrets.DO_USER_PROD }}/"
+
+      - name: Deploy to Production (DO)
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.DO_HOST_PROD }}
+          username: ${{ secrets.DO_USER_PROD }}
+          password: ${{ secrets.DO_PASSWORD_PROD }}
+          port: 22
+          script: |
+            docker login -u ${{ secrets.DOCKERHUB_USERNAME }} -p ${{ secrets.DOCKERHUB_TOKEN }}
+            docker pull ${{ secrets.DOCKERHUB_USERNAME }}/ldb-dva-be:latest
+
+            sed -i "s|^\([[:space:]]*\)build:.*|\1image: ${{ secrets.DOCKERHUB_USERNAME }}/ldb-dva-be:latest|" docker-compose.prod.yml
+
+            docker network create ldb-dva-internal-prod || true
+
+            docker compose -f docker-compose.prod.yml down || true
+            docker compose -f docker-compose.prod.yml up -d
+
+            docker system prune -f

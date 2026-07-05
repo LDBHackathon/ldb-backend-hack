@@ -9,7 +9,7 @@ from app.enums.transaction import TransactionStatus
 from app.models.customers import DedicatedAccount
 from app.models.transactions import Transaction
 from app.schemas.requests.filter import PaginateFilterRequestSchema
-from app.services.helpers import _customer_status, _outstanding_balance
+from app.services.helpers import _funding_status, _outstanding_balance
 from app.utils.response_formatter import error_response, paginated_success_response, success_response
 
 
@@ -101,7 +101,7 @@ class StatementService:
             "wallet_balance": customer.wallet_balance,
             "outstanding_balance": outstanding,
             "flagged_short_payments": flagged_short_payments,
-            "status": _customer_status(customer),
+            "status": _funding_status(customer),
             "transactions": [
                 {
                     "id": tx.id,

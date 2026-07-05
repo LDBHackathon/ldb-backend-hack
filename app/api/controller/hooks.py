@@ -25,9 +25,11 @@ async def nomba_webhook(
     request: Request,
     service: Annotated[NombaWebhookService, Depends()],
     nomba_signature: Annotated[str | None, Header(alias="nomba-signature")] = None,
+    nomba_sig_value: Annotated[str | None, Header(alias="nomba-sig-value")] = None,
 ) -> dict[str, Any]:
     raw_body = await request.body()
-    if not verify_nomba_signature(raw_body, nomba_signature):
+    signature = nomba_signature or nomba_sig_value
+    if not verify_nomba_signature(raw_body, signature):
         logger.warning("Nomba webhook signature verification failed")
         return error_response(status.HTTP_401_UNAUTHORIZED, "Invalid webhook signature")
 

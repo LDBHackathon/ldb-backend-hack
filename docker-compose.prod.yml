@@ -1,0 +1,26 @@
+name: ldb-dva-backend-prod
+services:
+  app:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "8080:8000"
+    depends_on:
+      - redis
+    volumes:
+      - /var/log/ldb-dva-api-prod:/app/logs
+
+  redis:
+    image: redis:7
+    restart: unless-stopped
+    volumes:
+      - redis_data_prod:/data
+
+volumes:
+  redis_data_prod:
+
+networks:
+  default:
+    name: ldb-dva-internal-prod
+    external: true

@@ -19,6 +19,9 @@ dependencies = [
     "orjson>=3.11.7",
     "aerich>=0.8.1",
     "apscheduler>=3.11.0",
+    "pyjwt>=2.13.0",
+    "bcrypt>=5.0.0",
+    "cloudinary>=1.44.1",
 ]
 
 [dependency-groups]

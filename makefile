@@ -1,6 +1,10 @@
 .PHONY: run
 run:
-	uvicorn app.main:application --reload
+	uvicorn app.main:application --reload --port 8070
+
+.PHONY: run-docker
+run-docker:
+	docker compose up --build
 
 .PHONY: makemigrations
 makemigrations:

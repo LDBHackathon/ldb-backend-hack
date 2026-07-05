@@ -30,7 +30,14 @@ class EnvSettings(BaseSettings):
     NOMBA_BASE_URL: str = "https://sandbox.nomba.com"
     NOMBA_WEBHOOK_SECRET: str = ""
 
+    SESSION_COOKIE_NAME: str = "ldb_session"
+    SESSION_JWT_EXPIRY_HOURS: int = Field(default=24, ge=1, le=168)
+
     NIGHTLY_RECONCILIATION_HOUR: int = Field(default=2, ge=0, le=23)
+
+    CLOUDINARY_CLOUD_NAME: str = ""
+    CLOUDINARY_API_KEY: str = ""
+    CLOUDINARY_API_SECRET: str = ""
 
 
 settings = EnvSettings()

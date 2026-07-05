@@ -4,6 +4,7 @@ from uuid import UUID
 from app.api.security.merchant_auth import ValidMerchant
 from app.schemas.requests.customers import (
     CreateCustomerRequestSchema,
+    LinkNombaSubAccountRequestSchema,
     UpdateCustomerRequestSchema,
 )
 from app.services.customers import CustomerService
@@ -16,6 +17,15 @@ async def create_customer(
     service: Annotated[CustomerService, Depends()],
 ) -> dict[str, Any]:
     return await service.create(body, merchant_id=merchant)
+
+
+async def link_nomba_sub_account(
+    customer_id: str,
+    body: LinkNombaSubAccountRequestSchema,
+    merchant: ValidMerchant,
+    service: Annotated[CustomerService, Depends()],
+) -> dict[str, Any]:
+    return await service.link_nomba_sub_account(customer_id, body, merchant_id=merchant)
 
 
 async def get_customer(

@@ -3,13 +3,18 @@ from uuid import UUID, uuid4
 
 from fastapi import status
 
-from app.integrations.nomba import NombaVirtualAccountService
+from app.enums.customer import CustomerStatus
+from app.integrations.nomba import NombaSubAccountService, NombaVirtualAccountService
+from app.integrations.nomba.helpers import build_nomba_account_ref
 from app.models.customers import Customer, DedicatedAccount
 from app.schemas.requests.customers import (
     CreateCustomerRequestSchema,
+    LinkNombaSubAccountRequestSchema,
     UpdateCustomerRequestSchema,
 )
 from app.services.helpers import build_customer_response
+from app.utils.logger import logger
+from app.utils.references import generate_merchant_customer_id
 from app.utils.response_formatter import error_response, success_response
 
 
@@ -19,69 +24,115 @@ class CustomerService:
     async def create(
         self, body: CreateCustomerRequestSchema, merchant_id: UUID
     ) -> dict[str, Any]:
-        existing = await Customer.get_or_none(
-            merchant_id=merchant_id,
-            merchant_customer_id=body.merchant_customer_id,
-        )
-        if existing:
-            return error_response(
-                status.HTTP_409_CONFLICT,
-                "Customer with this merchant_customer_id already exists",
-            )
-
-        existing_account = await DedicatedAccount.filter(
-            account_ref=body.merchant_customer_id
-        ).first()
-        if existing_account:
-            return error_response(
-                status.HTTP_409_CONFLICT,
-                "Dedicated account reference already exists",
-            )
+        merchant_customer_id = generate_merchant_customer_id()
+        sub_account_ref = build_nomba_account_ref()
 
         customer = await Customer.create(
             id=uuid4(),
             merchant_id=merchant_id,
-            merchant_customer_id=body.merchant_customer_id,
+            merchant_customer_id=merchant_customer_id,
             name=body.name,
             email=body.email,
             phone=body.phone,
             target_amount=body.target_amount,
             metadata=body.metadata,
+            nomba_sub_account_ref=sub_account_ref,
+            status=CustomerStatus.PENDING_NOMBA,
         )
 
-        nomba_result = await NombaVirtualAccountService.create(
-            account_ref=body.merchant_customer_id,
+        sub_result = await NombaSubAccountService.create(
             account_name=body.name,
+            account_ref=sub_account_ref,
         )
-        if not nomba_result["success"]:
-            await customer.delete()
-            return error_response(
-                status.HTTP_502_BAD_GATEWAY,
-                "Failed to provision Nomba virtual account",
-                [str(nomba_result.get("message", "Unknown Nomba error"))],
+        if not sub_result["success"]:
+            return success_response(
+                status.HTTP_201_CREATED,
+                "Customer created; link Nomba sub-account to complete provisioning",
+                data=await build_customer_response(customer),
             )
 
-        va_data = nomba_result["data"] or {}
-        account_number = va_data.get("accountNumber") or va_data.get("bankAccountNumber")
-        if not account_number:
-            await customer.delete()
-            return error_response(
-                status.HTTP_502_BAD_GATEWAY,
-                "Nomba response missing account number",
+        sub_data = sub_result["data"] or {}
+        sub_account_id = sub_data.get("account_id")
+        if not sub_account_id:
+            return success_response(
+                status.HTTP_201_CREATED,
+                "Customer created; Nomba sub-account response missing account ID",
+                data=await build_customer_response(customer),
             )
 
-        await DedicatedAccount.create(
-            id=uuid4(),
-            customer=customer,
-            nomba_va_id=va_data.get("id") or va_data.get("accountId"),
-            account_number=str(account_number).replace(" ", ""),
-            account_name=body.name,
-            account_ref=body.merchant_customer_id,
-        )
+        customer.nomba_sub_account_id = sub_account_id
+        await customer.save()
+
+        provisioned = await self._provision_virtual_account(customer, body)
+        if provisioned.get("error"):
+            logger.warning(
+                "Virtual account provisioning failed after sub-account creation",
+                customer_id=str(customer.id),
+                sub_account_id=sub_account_id,
+            )
+            return success_response(
+                status.HTTP_201_CREATED,
+                provisioned["error"],
+                data=await build_customer_response(customer),
+            )
 
         return success_response(
             status.HTTP_201_CREATED,
             "Customer and dedicated account created",
+            data=await build_customer_response(customer),
+        )
+
+    async def link_nomba_sub_account(
+        self,
+        customer_id: str,
+        body: LinkNombaSubAccountRequestSchema,
+        merchant_id: UUID,
+    ) -> dict[str, Any]:
+        customer = await self._resolve_customer(customer_id, merchant_id)
+        if not customer:
+            return error_response(status.HTTP_404_NOT_FOUND, "Customer not found")
+
+        if customer.status == CustomerStatus.ACTIVE:
+            existing = await DedicatedAccount.filter(customer_id=customer.id).first()
+            if existing:
+                return error_response(
+                    status.HTTP_409_CONFLICT,
+                    "Customer is already provisioned with a dedicated account",
+                )
+
+        details = await NombaSubAccountService.fetch_details(
+            account_id=body.nomba_sub_account_id,
+        )
+        if not details["success"]:
+            status_code = details.get("status_code", status.HTTP_502_BAD_GATEWAY)
+            http_status = (
+                status.HTTP_404_NOT_FOUND
+                if status_code == 404
+                else status.HTTP_502_BAD_GATEWAY
+            )
+            return error_response(
+                http_status,
+                "Nomba sub-account not found or inaccessible",
+                [str(details.get("message", "Unknown Nomba error"))],
+            )
+
+        sub_data = details["data"] or {}
+        customer.nomba_sub_account_id = sub_data.get("account_id") or body.nomba_sub_account_id
+        if sub_data.get("account_ref"):
+            customer.nomba_sub_account_ref = sub_data["account_ref"]
+        await customer.save()
+
+        provisioned = await self._provision_virtual_account(customer)
+        if provisioned.get("error"):
+            return error_response(
+                status.HTTP_502_BAD_GATEWAY,
+                provisioned["error"],
+                [str(provisioned.get("detail", ""))],
+            )
+
+        return success_response(
+            status.HTTP_200_OK,
+            "Nomba sub-account linked and virtual account provisioned",
             data=await build_customer_response(customer),
         )
 
@@ -118,20 +169,85 @@ class CustomerService:
 
         await customer.save()
 
-        if body.name is not None:
-            account = await DedicatedAccount.filter(customer_id=customer.id).first()
-            if account:
+        account = await DedicatedAccount.filter(customer_id=customer.id).first()
+        if account and (body.name is not None or body.target_amount is not None):
+            if body.name is not None:
                 account.account_name = body.name
-                await account.save()
-                await NombaVirtualAccountService.update_account_name(
-                    account.account_ref, body.name
-                )
+            await account.save()
+            await NombaVirtualAccountService.update(
+                account.account_ref,
+                account_name=body.name,
+                expected_amount=body.target_amount,
+            )
 
         return success_response(
             status.HTTP_200_OK,
             "Customer updated",
             data=await build_customer_response(customer),
         )
+
+    async def _provision_virtual_account(
+        self,
+        customer: Customer,
+        body: CreateCustomerRequestSchema | None = None,
+    ) -> dict[str, Any]:
+        if not customer.nomba_sub_account_id:
+            return {"error": "Customer has no Nomba sub-account ID"}
+
+        existing = await DedicatedAccount.filter(customer_id=customer.id).first()
+        if existing:
+            customer.status = CustomerStatus.ACTIVE
+            await customer.save()
+            return {}
+
+        account_ref = build_nomba_account_ref(customer.nomba_sub_account_ref)
+        account_name = body.name if body else customer.name
+        bvn = body.bvn if body else None
+        expected_amount = body.target_amount if body else customer.target_amount
+
+        nomba_result = await NombaVirtualAccountService.create(
+            account_ref=account_ref,
+            account_name=account_name,
+            sub_account_id=customer.nomba_sub_account_id,
+            bvn=bvn,
+            expected_amount=expected_amount,
+        )
+        if not nomba_result["success"]:
+            return {
+                "error": "Failed to provision Nomba virtual account",
+                "detail": nomba_result.get("message", "Unknown Nomba error"),
+            }
+
+        va_data = nomba_result["data"] or {}
+        account_number = va_data.get("account_number")
+        if not account_number:
+            return {
+                "error": "Nomba response missing bank account number",
+                "detail": "Missing account_number in Nomba response",
+            }
+
+        await DedicatedAccount.create(
+            id=uuid4(),
+            customer=customer,
+            nomba_va_id=va_data.get("nomba_va_id"),
+            nomba_sub_account_id=customer.nomba_sub_account_id,
+            account_number=account_number,
+            account_name=account_name,
+            account_ref=va_data.get("account_ref") or account_ref,
+        )
+        customer.status = CustomerStatus.ACTIVE
+        await customer.save()
+
+        account = await DedicatedAccount.filter(customer_id=customer.id).first()
+        if account:
+            from app.services.webhook_forwarder import WebhookForwarderService
+
+            await WebhookForwarderService().emit_account_created(
+                merchant_id=customer.merchant_id,
+                customer=customer,
+                account=account,
+            )
+        return {}
 
     async def _resolve_customer(
         self, customer_id: str, merchant_id: UUID

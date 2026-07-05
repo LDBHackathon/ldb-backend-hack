@@ -2,13 +2,16 @@ from typing import Any, TypedDict
 
 
 class NombaVirtualAccountData(TypedDict, total=False):
-    """Nomba virtual account creation response data."""
+    """Normalized Nomba virtual account response."""
 
-    accountNumber: str
-    accountRef: str
-    accountName: str
-    bankName: str
-    id: str
+    account_ref: str
+    account_name: str
+    account_number: str
+    bank_name: str
+    nomba_va_id: str
+    account_holder_id: str
+    currency: str
+    raw: dict[str, Any]
 
 
 class NombaWebhookPayload(TypedDict, total=False):

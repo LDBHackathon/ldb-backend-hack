@@ -9,6 +9,7 @@ from secure import ContentSecurityPolicy, Secure
 
 from app import __display_name__, __version__
 from app.api import router
+from app.bootstrap.merchants import bootstrap_default_merchant
 from app.config.tortoise import register_orm
 from app.jobs.nightly_reconciliation import run_nightly_reconciliation
 from app.middlewares.metrics import MetricsMiddleware
@@ -22,6 +23,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     async with AsyncExitStack() as stack:
         logger.info("Application startup initiated")
         await stack.enter_async_context(register_orm(app))
+        await bootstrap_default_merchant()
 
         scheduler = AsyncIOScheduler()
         scheduler.add_job(

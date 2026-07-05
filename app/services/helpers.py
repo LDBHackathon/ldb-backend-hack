@@ -1,12 +1,13 @@
 from decimal import Decimal
 from uuid import UUID
 
+from app.enums.customer import CustomerStatus
 from app.enums.account import AccountStatus
 from app.enums.transaction import TransactionStatus
 from app.models.customers import Customer, DedicatedAccount
 
 
-def _customer_status(customer: Customer) -> str:
+def _funding_status(customer: Customer) -> str:
     if customer.target_amount is None:
         return "Normal"
     if customer.wallet_balance >= customer.target_amount:
@@ -53,7 +54,9 @@ async def build_customer_response(customer: Customer) -> dict:
         "wallet_balance": customer.wallet_balance,
         "outstanding_balance": _outstanding_balance(customer),
         "progress_percentage": _progress_percentage(customer),
-        "status": _customer_status(customer),
+        "status": customer.status,
+        "funding_status": _funding_status(customer),
+        "nomba_sub_account_id": customer.nomba_sub_account_id,
         "metadata": customer.metadata,
         "dedicated_account": dedicated_account,
         "created_at": customer.created_at,
@@ -94,3 +97,52 @@ def derive_transaction_status(
     if received_amount > 0:
         return TransactionStatus.PARTIAL
     return TransactionStatus.MISDIRECTED
+
+
+def derive_customer_flags(
+    customer: Customer,
+    *,
+    has_misdirected: bool = False,
+) -> list[str]:
+    """Map customer funding state to PDF UI flags."""
+    flags: list[str] = []
+    if has_misdirected:
+        flags.append("Misdirected")
+    if (
+        customer.target_amount is not None
+        and customer.wallet_balance > customer.target_amount
+    ):
+        flags.append("Overpaid")
+    funding = _funding_status(customer)
+    if funding == "Underpayment":
+        flags.append("Underpaid")
+    if not flags:
+        flags.append("Normal")
+    return flags
+
+
+def portal_customer_status(flags: list[str]) -> str:
+    """Primary status label for portal customer list."""
+    if "Misdirected" in flags:
+        return "Misdirected"
+    if "Overpaid" in flags:
+        return "Overpaid"
+    if "Underpaid" in flags:
+        return "Underpayment"
+    return "Normal"
+
+
+def transaction_portal_flag(status: TransactionStatus) -> str:
+    """Map transaction reconciliation status to PDF flag label."""
+    mapping = {
+        TransactionStatus.PARTIAL: "Underpaid",
+        TransactionStatus.OVERPAYMENT: "Overpaid",
+        TransactionStatus.MISDIRECTED: "Misdirected",
+        TransactionStatus.FULL: "Normal",
+    }
+    return mapping.get(status, "Normal")
+
+
+def transaction_portal_status(status: TransactionStatus) -> str:
+    """Success/Failed label for portal transaction rows."""
+    return "Failed" if status == TransactionStatus.MISDIRECTED else "Success"

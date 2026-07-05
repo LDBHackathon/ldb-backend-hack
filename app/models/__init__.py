@@ -1,4 +1,5 @@
 from app.models.customers import Customer, DedicatedAccount
+from app.models.merchants import Merchant, MerchantApiKey
 from app.models.transactions import (
     ProcessedWebhookEvent,
     ReconciliationLog,
@@ -8,6 +9,8 @@ from app.models.transactions import (
 )
 
 __models__ = (
+    Merchant,
+    MerchantApiKey,
     Customer,
     DedicatedAccount,
     Transaction,

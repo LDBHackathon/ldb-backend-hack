@@ -12,3 +12,4 @@ wheels/
 # Logs and env
 logs/
 .env
+.env-dev

@@ -7,10 +7,10 @@ RUN apt-get update && \
     apt-get install -y --no-install-recommends gcc libpq-dev && \
     rm -rf /var/lib/apt/lists/*
 
-COPY pyproject.toml ./
+COPY pyproject.toml uv.lock ./
 COPY ./app ./app
 
-RUN uv sync
+RUN uv sync --locked
 
 
 FROM python:3.14-slim-bookworm
