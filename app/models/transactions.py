@@ -94,6 +94,7 @@ class ProcessedWebhookEvent(models.Model):
     id: UUID = fields.UUIDField(primary_key=True)
     request_id: str = fields.CharField(max_length=100, unique=True)
     event_type: str = fields.CharField(max_length=100)
+    raw_payload = fields.JSONField[dict[str, Any]](default=dict)
     processed_at: datetime = fields.DatetimeField(auto_now_add=True)
 
     class Meta(models.Model.Meta):

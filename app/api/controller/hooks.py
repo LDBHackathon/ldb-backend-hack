@@ -34,7 +34,21 @@ async def nomba_webhook(
         return error_response(status.HTTP_401_UNAUTHORIZED, "Invalid webhook signature")
 
     payload = json.loads(raw_body)
-    return await service.receive(payload)
+    logger.info(
+        "Nomba webhook received",
+        event_type=payload.get("event_type") or payload.get("eventType"),
+        request_id=payload.get("requestId") or payload.get("request_id"),
+        nomba_payload=payload,
+    )
+    result = await service.receive(payload)
+    logger.info(
+        "Nomba webhook processed",
+        request_id=payload.get("requestId") or payload.get("request_id"),
+        status_code=result.get("status_code"),
+        message=result.get("message"),
+        data=result.get("data"),
+    )
+    return result
 
 
 async def simulate_funding(

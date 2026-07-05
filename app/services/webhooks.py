@@ -23,14 +23,26 @@ class NombaWebhookService:
     async def receive(self, payload: dict[str, Any]) -> dict[str, Any]:
         event_type = payload.get("event_type") or payload.get("eventType")
         request_id = payload.get("requestId") or payload.get("request_id")
+
+        logger.info(
+            "Processing Nomba webhook",
+            event_type=event_type,
+            request_id=request_id,
+        )
+
         if not request_id:
+            logger.warning("Nomba webhook rejected: missing requestId", nomba_payload=payload)
             return error_response(
                 status.HTTP_400_BAD_REQUEST,
                 "Webhook missing requestId",
             )
 
         if await ProcessedWebhookEvent.filter(request_id=request_id).exists():
-            logger.info("Duplicate webhook skipped", request_id=request_id)
+            logger.info(
+                "Duplicate Nomba webhook skipped",
+                request_id=request_id,
+                event_type=event_type,
+            )
             return success_response(
                 status.HTTP_200_OK,
                 "Webhook already processed",
@@ -41,6 +53,12 @@ class NombaWebhookService:
                 id=uuid4(),
                 request_id=request_id,
                 event_type=str(event_type),
+                raw_payload=payload,
+            )
+            logger.info(
+                "Nomba webhook stored (ignored event type)",
+                request_id=request_id,
+                event_type=event_type,
             )
             return success_response(
                 status.HTTP_200_OK,
@@ -53,6 +71,12 @@ class NombaWebhookService:
                 id=uuid4(),
                 request_id=request_id,
                 event_type=str(event_type),
+                raw_payload=payload,
+            )
+            logger.info(
+                "Nomba webhook stored (non virtual-account transfer)",
+                request_id=request_id,
+                transaction_type=transaction_data.get("type"),
             )
             return success_response(
                 status.HTTP_200_OK,
@@ -69,6 +93,20 @@ class NombaWebhookService:
             id=uuid4(),
             request_id=request_id,
             event_type=str(event_type),
+            raw_payload=payload,
+        )
+
+        logger.info(
+            "Nomba payment webhook reconciled",
+            request_id=request_id,
+            transaction_id=str(result["transaction_id"]),
+            status=result["status"].value
+            if hasattr(result["status"], "value")
+            else result["status"],
+            wallet_balance=str(result["wallet_balance"])
+            if result["wallet_balance"] is not None
+            else None,
+            quarantined=result["quarantined"],
         )
 
         return success_response(
