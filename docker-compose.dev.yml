@@ -3,7 +3,7 @@ services:
   app:
     build: .
     restart: unless-stopped
-    env_file: .env-dev
+    env_file: .env-hack
     ports:
       - "8070:8000"
     depends_on:
