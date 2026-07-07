@@ -156,6 +156,28 @@ Requires **`active`** merchant status (available after KYB submit).
 | `/portal/settings/webhook` | GET | Outbound webhook URL and events |
 | `/portal/settings/webhook` | PUT | Set webhook URL and subscribed events |
 | `/portal/settings/webhook/test` | POST | Send a test payload to your webhook |
+
+**Webhook test troubleshooting**
+
+- Use **POST** with portal auth (`ldb_session` cookie or Bearer API key).
+- Merchant must be **`active`** (complete KYB submit first).
+- Save the webhook first via `PUT /portal/settings/webhook`.
+- Your receiver URL must be **publicly reachable** from the API server (not `localhost` or a private LAN IP).
+- The API returns `delivered: true` only if your endpoint responds with HTTP 2xx. Otherwise check `data.reason` and `data.attempts` for the URL, status code, or connection error.
+- Test payload shape:
+
+```json
+{
+  "event": "wallet.credited",
+  "data": {
+    "customerId": "demo-customer",
+    "amountReceived": "60000",
+    "transactionRef": "TXN-DEMO-TEST"
+  }
+}
+```
+
+- Verify with header `X-LDB-Signature` (HMAC-SHA256 of the raw JSON body using your webhook secret).
 | `/portal/settings/profile` | GET / PATCH | Merchant profile |
 | `/portal/settings/security/password` | POST | Change dashboard password |
 

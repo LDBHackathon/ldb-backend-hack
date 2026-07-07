@@ -352,11 +352,19 @@ class SettingsService:
         from app.services.webhook_forwarder import WebhookForwarderService
 
         forwarder = WebhookForwarderService()
-        delivered = await forwarder.emit_test_event(merchant_id)
+        result = await forwarder.emit_test_event(merchant_id)
+        status_code = (
+            status.HTTP_200_OK if result["delivered"] else status.HTTP_502_BAD_GATEWAY
+        )
+        message = (
+            "Webhook test delivered"
+            if result["delivered"]
+            else result.get("reason") or "Webhook test failed"
+        )
         return success_response(
-            status.HTTP_200_OK,
-            "Webhook test dispatched",
-            data={"delivered": delivered},
+            status_code,
+            message,
+            data=result,
         )
 
     async def get_profile(self, merchant_id: UUID) -> dict[str, Any]:

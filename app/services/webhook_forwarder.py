@@ -79,7 +79,7 @@ class WebhookForwarderService:
         }
         await self._deliver(merchant_id, OUTBOUND_EVENT_ACCOUNT_CREATED, payload)
 
-    async def emit_test_event(self, merchant_id: UUID) -> bool:
+    async def emit_test_event(self, merchant_id: UUID) -> dict[str, Any]:
         payload = {
             "customerId": "demo-customer",
             "customerName": "Demo Customer",
@@ -93,11 +93,91 @@ class WebhookForwarderService:
             "senderName": "Demo Sender",
             "senderBank": "GTBank",
         }
-        return await self._deliver(
+        return await self._deliver_test(
             merchant_id,
             OUTBOUND_EVENT_WALLET_CREDITED,
             payload,
         )
+
+    async def _deliver_test(
+        self,
+        merchant_id: UUID,
+        event: str,
+        data: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Send a test webhook, bypassing event subscription filters."""
+        registrations = await WebhookRegistration.filter(
+            merchant_id=merchant_id,
+            active=True,
+        ).all()
+        if not registrations:
+            logger.warning(
+                "Webhook test skipped: no active registration",
+                merchant_id=str(merchant_id),
+            )
+            return {
+                "delivered": False,
+                "reason": "No active webhook configured for this merchant",
+                "attempts": [],
+            }
+
+        payload = {"event": event, "data": data}
+        body = json.dumps(payload, separators=(",", ":")).encode()
+        attempts: list[dict[str, Any]] = []
+        delivered = False
+
+        for registration in registrations:
+            signature = hmac.new(
+                registration.secret.encode(),
+                body,
+                hashlib.sha256,
+            ).hexdigest()
+            attempt: dict[str, Any] = {"url": registration.url}
+            try:
+                async with httpx.AsyncClient(timeout=10.0) as client:
+                    response = await client.post(
+                        registration.url,
+                        content=body,
+                        headers={
+                            "Content-Type": "application/json",
+                            "X-LDB-Signature": signature,
+                        },
+                    )
+                attempt["status_code"] = response.status_code
+                if response.is_success:
+                    delivered = True
+                    logger.info(
+                        "Outbound webhook test delivered",
+                        url=registration.url,
+                        webhook_event=event,
+                        status_code=response.status_code,
+                        nomba_payload=payload,
+                    )
+                else:
+                    attempt["error"] = response.text[:500]
+                    logger.warning(
+                        "Outbound webhook test rejected by receiver",
+                        url=registration.url,
+                        webhook_event=event,
+                        status_code=response.status_code,
+                    )
+            except httpx.HTTPError as exc:
+                attempt["error"] = str(exc)
+                logger.warning(
+                    "Outbound webhook test delivery failed",
+                    url=registration.url,
+                    webhook_event=event,
+                    error=str(exc),
+                )
+            attempts.append(attempt)
+
+        return {
+            "delivered": delivered,
+            "reason": None if delivered else "Webhook URL unreachable or returned an error",
+            "event": event,
+            "payload": payload,
+            "attempts": attempts,
+        }
 
     def _events_for_transaction(self, transaction: Transaction) -> list[str]:
         events = [OUTBOUND_EVENT_PAYMENT_RECEIVED, OUTBOUND_EVENT_WALLET_CREDITED]
@@ -145,7 +225,7 @@ class WebhookForwarderService:
         registrations = await WebhookRegistration.filter(
             merchant_id=merchant_id,
             active=True,
-        )
+        ).all()
         if not registrations:
             return False
 
