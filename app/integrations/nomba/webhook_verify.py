@@ -31,6 +31,22 @@ def build_nomba_signing_payload(payload: dict[str, Any], timestamp: str) -> str:
     )
 
 
+def compute_nomba_expected_signature(
+    payload: dict[str, Any], timestamp: str | None
+) -> str | None:
+    """Return the HMAC signature LDB expects for a Nomba webhook payload."""
+    if not timestamp or not settings.NOMBA_WEBHOOK_SECRET:
+        return None
+
+    signing_payload = build_nomba_signing_payload(payload, timestamp)
+    digest = hmac.new(
+        settings.NOMBA_WEBHOOK_SECRET.encode(),
+        signing_payload.encode(),
+        hashlib.sha256,
+    ).digest()
+    return base64.b64encode(digest).decode()
+
+
 def verify_nomba_signature(
     payload: dict[str, Any],
     signature: str | None,

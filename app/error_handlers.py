@@ -5,14 +5,12 @@ from fastapi.responses import JSONResponse
 
 from app.main import application
 from app.utils.exceptions import ErrorResponse, RateLimitErrorResponse
-from app.utils.logger import logger
 
 
 @application.exception_handler(ErrorResponse)
 async def api_error_response_handler(
     _request: Request, exc: ErrorResponse
 ) -> JSONResponse:
-    logger.warning("Handled API error response", error_message=exc.message)
     return JSONResponse(
         {
             "status": "failure",
@@ -28,9 +26,6 @@ async def api_error_response_handler(
 async def http_error_response_handler(
     _request: Request, exc: HTTPException
 ) -> JSONResponse:
-    logger.warning(
-        "Handled HTTP exception", status_code=exc.status_code, detail=exc.detail
-    )
     return JSONResponse(
         {
             "status": "failure",
@@ -50,7 +45,6 @@ async def validation_error_response_handler(
         f"{err['loc'][-1]} {err['msg']}"
         for err in exc.errors()
     ]
-    logger.warning("Handled validation error", errors_count=len(errors))
     return JSONResponse(
         jsonable_encoder(
             {
@@ -68,7 +62,6 @@ async def validation_error_response_handler(
 async def rate_limit_error_response_handler(
     _request: Request, exc: RateLimitErrorResponse
 ) -> JSONResponse:
-    logger.warning("Rate limit exceeded")
     return JSONResponse(
         {
             "status": "failure",
@@ -84,7 +77,6 @@ async def rate_limit_error_response_handler(
 async def internal_server_error_response_handler(
     _request: Request, exc: Exception
 ) -> JSONResponse:
-    logger.exception("Unhandled exception occurred", error_message=str(exc))
     return JSONResponse(
         {
             "status": "failure",

@@ -1,57 +1,36 @@
-"""Logger utility for the application."""
+"""Minimal logging shim; info/debug are silent so Docker shows uvicorn access logs only."""
 
 import logging
-from pathlib import Path
-
-import orjson
-import structlog
-
-from app.settings import settings
-
-BASE_DIR = Path(__file__).resolve().parent.parent.parent
-LOGS_DIR = BASE_DIR / "logs"
-LOGS_DIR.mkdir(exist_ok=True)
-
-_shared_processors = [
-    structlog.contextvars.merge_contextvars,
-    structlog.processors.add_log_level,
-    structlog.processors.StackInfoRenderer(),
-    structlog.dev.set_exc_info,
-    structlog.processors.TimeStamper(fmt="iso", utc=True),
-]
-
-structlog.configure(
-    processors=(
-        [
-            *_shared_processors,
-            structlog.processors.dict_tracebacks,
-            structlog.processors.EventRenamer("event_message"),
-            structlog.processors.JSONRenderer(serializer=orjson.dumps),
-        ]
-        if settings.FILE_LOGGING
-        else [*_shared_processors, structlog.dev.ConsoleRenderer()]
-    ),
-    wrapper_class=structlog.make_filtering_bound_logger(
-        logging.INFO if settings.FILE_LOGGING else logging.DEBUG
-    ),
-    logger_factory=(
-        structlog.BytesLoggerFactory((LOGS_DIR / "app.log").open("ab"))
-        if settings.FILE_LOGGING
-        else structlog.WriteLoggerFactory()
-    ),
-    cache_logger_on_first_use=True,
-)
-
-logger = structlog.get_logger().bind(service="LDB DVA API")
+from typing import Any
 
 
-def bind_request_context(correlation_id: str, ip_address: str) -> None:
-    """Bind request-scoped fields to structlog contextvars."""
-    structlog.contextvars.bind_contextvars(
-        correlation_id=correlation_id, ip_address=ip_address
-    )
+def _format_message(message: str, **kwargs: Any) -> str:
+    if not kwargs:
+        return message
+    extras = " ".join(f"{key}={value}" for key, value in kwargs.items())
+    return f"{message} {extras}"
 
 
-def clear_request_context() -> None:
-    """Clear request-scoped contextvars after request completion."""
-    structlog.contextvars.clear_contextvars()
+class _SilentInfoLogger:
+    """Accept structlog-style kwargs but only emit warning-level and above."""
+
+    def __init__(self) -> None:
+        self._log = logging.getLogger("ldb")
+
+    def debug(self, message: str, **kwargs: Any) -> None:
+        pass
+
+    def info(self, message: str, **kwargs: Any) -> None:
+        pass
+
+    def warning(self, message: str, **kwargs: Any) -> None:
+        self._log.warning(_format_message(message, **kwargs))
+
+    def error(self, message: str, **kwargs: Any) -> None:
+        self._log.error(_format_message(message, **kwargs))
+
+    def exception(self, message: str, **kwargs: Any) -> None:
+        self._log.exception(_format_message(message, **kwargs))
+
+
+logger = _SilentInfoLogger()

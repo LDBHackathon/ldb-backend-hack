@@ -13,15 +13,12 @@ from app.bootstrap.merchants import bootstrap_default_merchant
 from app.config.tortoise import register_orm
 from app.jobs.nightly_reconciliation import run_nightly_reconciliation
 from app.middlewares.metrics import MetricsMiddleware
-from app.middlewares.request_logger import RequestLoggerMiddleware
 from app.settings import settings
-from app.utils.logger import logger
 
 
 @asynccontextmanager
 async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     async with AsyncExitStack() as stack:
-        logger.info("Application startup initiated")
         await stack.enter_async_context(register_orm(app))
         await bootstrap_default_merchant()
 
@@ -35,12 +32,9 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
             replace_existing=True,
         )
         scheduler.start()
-        logger.info("Nightly reconciliation job scheduled")
 
-        logger.info("Application startup completed")
         yield
         scheduler.shutdown(wait=False)
-        logger.info("Application shutdown completed")
 
 
 application = FastAPI(
@@ -82,7 +76,6 @@ application.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-application.add_middleware(RequestLoggerMiddleware)
 application.add_middleware(MetricsMiddleware)
 application.mount("/metrics", make_asgi_app())  # type: ignore
 application.include_router(router.routes)
