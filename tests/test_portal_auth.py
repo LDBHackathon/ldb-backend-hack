@@ -136,3 +136,82 @@ async def test_onboarding_submit_requires_steps() -> None:
 
         with pytest.raises(ErrorResponse):
             await service.submit(merchant.id)
+
+
+@pytest.mark.asyncio
+async def test_onboarding_submit_activates_merchant() -> None:
+    service = OnboardingService()
+    merchant = AsyncMock()
+    merchant.id = uuid4()
+    merchant.kyb_data = {
+        "business": {"business_name": "WealthVault"},
+        "address": {"address_line": "12 Marina"},
+        "verification": {"director_name": "Amara", "consent": True},
+    }
+    merchant.status = MerchantStatus.PENDING_KYB
+    merchant.save = AsyncMock()
+
+    with patch(
+        "app.services.auth.Merchant.get_or_none",
+        new_callable=AsyncMock,
+        return_value=merchant,
+    ):
+        result = await service.submit(merchant.id)
+
+    assert result["status_code"] == 200
+    assert result["message"] == "KYB completed — account activated"
+    assert merchant.status == MerchantStatus.ACTIVE
+    assert merchant.kyb_data["submitted_at"]
+    assert merchant.kyb_data["approved_at"] == merchant.kyb_data["submitted_at"]
+    merchant.save.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_onboarding_submit_rejects_when_already_active() -> None:
+    service = OnboardingService()
+    merchant = AsyncMock()
+    merchant.id = uuid4()
+    merchant.kyb_data = {
+        "business": {"business_name": "WealthVault"},
+        "address": {"address_line": "12 Marina"},
+        "verification": {"director_name": "Amara", "consent": True},
+        "submitted_at": "2026-01-01T00:00:00+00:00",
+    }
+    merchant.status = MerchantStatus.ACTIVE
+
+    with patch(
+        "app.services.auth.Merchant.get_or_none",
+        new_callable=AsyncMock,
+        return_value=merchant,
+    ):
+        from app.utils.exceptions import ErrorResponse
+
+        with pytest.raises(ErrorResponse) as exc_info:
+            await service.submit(merchant.id)
+
+    assert exc_info.value.status == 422
+    assert "already completed" in exc_info.value.message
+
+
+@pytest.mark.asyncio
+async def test_active_portal_merchant_blocks_pending_kyb() -> None:
+    from fastapi import status
+
+    from app.api.security.portal_auth import get_active_portal_merchant
+    from app.utils.exceptions import ErrorResponse
+
+    merchant_id = uuid4()
+    merchant = AsyncMock()
+    merchant.id = merchant_id
+    merchant.status = MerchantStatus.PENDING_KYB
+
+    with patch(
+        "app.api.security.portal_auth.Merchant.get_or_none",
+        new_callable=AsyncMock,
+        return_value=merchant,
+    ):
+        with pytest.raises(ErrorResponse) as exc_info:
+            await get_active_portal_merchant(merchant_id)
+
+    assert exc_info.value.status == status.HTTP_403_FORBIDDEN
+    assert "Complete KYB onboarding" in exc_info.value.message

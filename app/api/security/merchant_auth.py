@@ -13,8 +13,8 @@ from app.utils.logger import logger
 Authorization = Annotated[HTTPAuthorizationCredentials, Depends(HTTPBearer())]
 
 
-async def get_merchant_from_bearer(auth: Authorization) -> UUID:
-    """Validate merchant API key and return merchant ID."""
+async def get_merchant_id_from_bearer(auth: Authorization) -> UUID:
+    """Validate merchant API key and return merchant ID (any non-suspended status)."""
     raw_key = auth.credentials
     prefix = api_key_prefix(raw_key)
     key_hash = hash_api_key(raw_key)
@@ -33,10 +33,26 @@ async def get_merchant_from_bearer(auth: Authorization) -> UUID:
         raise ErrorResponse(status.HTTP_401_UNAUTHORIZED, "Unauthorized access")
 
     merchant: Merchant = api_key.merchant
-    if merchant.status != MerchantStatus.ACTIVE:
-        raise ErrorResponse(status.HTTP_401_UNAUTHORIZED, "Merchant account suspended")
+    if merchant.status == MerchantStatus.SUSPENDED:
+        raise ErrorResponse(status.HTTP_403_FORBIDDEN, "Merchant account suspended")
 
     return merchant.id
+
+
+async def get_merchant_from_bearer(auth: Authorization) -> UUID:
+    """Validate merchant API key and return merchant ID (active merchants only)."""
+    merchant_id = await get_merchant_id_from_bearer(auth)
+    merchant = await Merchant.get(id=merchant_id)
+
+    if merchant.status == MerchantStatus.PENDING_KYB:
+        raise ErrorResponse(
+            status.HTTP_403_FORBIDDEN,
+            "Complete KYB onboarding before using the API",
+        )
+    if merchant.status != MerchantStatus.ACTIVE:
+        raise ErrorResponse(status.HTTP_403_FORBIDDEN, "Merchant account suspended")
+
+    return merchant_id
 
 
 ValidMerchant = Annotated[UUID, Depends(get_merchant_from_bearer)]

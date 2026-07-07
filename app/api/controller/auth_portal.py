@@ -3,7 +3,7 @@ from uuid import UUID
 
 from fastapi import Depends, File, Form, Response, UploadFile
 
-from app.api.security.portal_auth import ValidPortalMerchant
+from app.api.security.portal_auth import ValidActivePortalMerchant, ValidPortalMerchant
 from app.schemas.requests.auth import (
     ChangePasswordRequestSchema,
     LoginAuthRequestSchema,
@@ -135,21 +135,21 @@ async def onboarding_status(
 
 
 async def settings_credentials(
-    merchant: ValidPortalMerchant,
+    merchant: ValidActivePortalMerchant,
     service: Annotated[SettingsService, Depends()],
 ) -> dict[str, Any]:
     return await service.get_credentials(merchant)
 
 
 async def settings_rotate_credentials(
-    merchant: ValidPortalMerchant,
+    merchant: ValidActivePortalMerchant,
     service: Annotated[SettingsService, Depends()],
 ) -> dict[str, Any]:
     return await service.rotate_credentials(merchant)
 
 
 async def settings_get_webhook(
-    merchant: ValidPortalMerchant,
+    merchant: ValidActivePortalMerchant,
     service: Annotated[SettingsService, Depends()],
 ) -> dict[str, Any]:
     return await service.get_webhook(merchant)
@@ -157,21 +157,21 @@ async def settings_get_webhook(
 
 async def settings_update_webhook(
     body: UpdateWebhookSettingsRequestSchema,
-    merchant: ValidPortalMerchant,
+    merchant: ValidActivePortalMerchant,
     service: Annotated[SettingsService, Depends()],
 ) -> dict[str, Any]:
     return await service.update_webhook(merchant, body)
 
 
 async def settings_test_webhook(
-    merchant: ValidPortalMerchant,
+    merchant: ValidActivePortalMerchant,
     service: Annotated[SettingsService, Depends()],
 ) -> dict[str, Any]:
     return await service.test_webhook(merchant)
 
 
 async def settings_get_profile(
-    merchant: ValidPortalMerchant,
+    merchant: ValidActivePortalMerchant,
     service: Annotated[SettingsService, Depends()],
 ) -> dict[str, Any]:
     return await service.get_profile(merchant)
@@ -179,7 +179,7 @@ async def settings_get_profile(
 
 async def settings_update_profile(
     body: UpdateProfileSettingsRequestSchema,
-    merchant: ValidPortalMerchant,
+    merchant: ValidActivePortalMerchant,
     service: Annotated[SettingsService, Depends()],
 ) -> dict[str, Any]:
     return await service.update_profile(merchant, body)
@@ -187,7 +187,7 @@ async def settings_update_profile(
 
 async def settings_change_password(
     body: ChangePasswordRequestSchema,
-    merchant: ValidPortalMerchant,
+    merchant: ValidActivePortalMerchant,
     service: Annotated[SettingsService, Depends()],
 ) -> dict[str, Any]:
     return await service.change_password(merchant, body)

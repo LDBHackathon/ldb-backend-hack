@@ -4,12 +4,12 @@ from typing import Annotated, Any
 
 from fastapi import Depends, File, UploadFile
 
-from app.api.security.portal_auth import ValidPortalMerchant
+from app.api.security.portal_auth import ValidActivePortalMerchant
 from app.services.file_upload import FileUploadService
 
 
 async def upload_single_file(
-    _merchant: ValidPortalMerchant,
+    _merchant: ValidActivePortalMerchant,
     file: UploadFile,
     folder: str = "uploads/kyb",
     service: Annotated[FileUploadService, Depends()] = ...,
@@ -19,7 +19,7 @@ async def upload_single_file(
 
 
 async def upload_multiple_files(
-    _merchant: ValidPortalMerchant,
+    _merchant: ValidActivePortalMerchant,
     files: Annotated[list[UploadFile], File()],
     folder: str = "uploads/kyb",
     service: Annotated[FileUploadService, Depends()] = ...,
@@ -29,7 +29,7 @@ async def upload_multiple_files(
 
 
 async def delete_file(
-    _merchant: ValidPortalMerchant,
+    _merchant: ValidActivePortalMerchant,
     public_id: str,
     service: Annotated[FileUploadService, Depends()] = ...,
 ) -> dict[str, Any]:
@@ -38,7 +38,7 @@ async def delete_file(
 
 
 async def get_file_info(
-    _merchant: ValidPortalMerchant,
+    _merchant: ValidActivePortalMerchant,
     public_id: str,
     service: Annotated[FileUploadService, Depends()] = ...,
 ) -> dict[str, Any]:

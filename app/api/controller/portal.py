@@ -3,20 +3,20 @@ from uuid import UUID
 
 from fastapi import Depends, Response
 
-from app.api.security.portal_auth import ValidPortalMerchant
+from app.api.security.portal_auth import ValidActivePortalMerchant
 from app.schemas.requests.filter import SimulateFundingRequestSchema
 from app.services.portal import PortalService
 
 
 async def dashboard_summary(
-    merchant: ValidPortalMerchant,
+    merchant: ValidActivePortalMerchant,
     service: Annotated[PortalService, Depends()],
 ) -> dict[str, Any]:
     return await service.dashboard_summary(merchant)
 
 
 async def list_portal_customers(
-    merchant: ValidPortalMerchant,
+    merchant: ValidActivePortalMerchant,
     service: Annotated[PortalService, Depends()],
     q: str | None = None,
     flag: str | None = None,
@@ -30,7 +30,7 @@ async def list_portal_customers(
 
 async def get_portal_customer(
     customer_id: str,
-    merchant: ValidPortalMerchant,
+    merchant: ValidActivePortalMerchant,
     service: Annotated[PortalService, Depends()],
 ) -> dict[str, Any]:
     return await service.get_customer(customer_id, merchant)
@@ -38,14 +38,14 @@ async def get_portal_customer(
 
 async def get_portal_customer_statement(
     customer_id: str,
-    merchant: ValidPortalMerchant,
+    merchant: ValidActivePortalMerchant,
     service: Annotated[PortalService, Depends()],
 ) -> dict[str, Any]:
     return await service.get_customer_statement(customer_id, merchant)
 
 
 async def list_portal_transactions(
-    merchant: ValidPortalMerchant,
+    merchant: ValidActivePortalMerchant,
     service: Annotated[PortalService, Depends()],
     q: str | None = None,
     txn_type: str | None = None,
@@ -66,14 +66,14 @@ async def list_portal_transactions(
 
 
 async def portal_transactions_summary(
-    merchant: ValidPortalMerchant,
+    merchant: ValidActivePortalMerchant,
     service: Annotated[PortalService, Depends()],
 ) -> dict[str, Any]:
     return await service.transactions_summary(merchant)
 
 
 async def portal_recent_transactions(
-    merchant: ValidPortalMerchant,
+    merchant: ValidActivePortalMerchant,
     service: Annotated[PortalService, Depends()],
     limit: int = 6,
 ) -> dict[str, Any]:
@@ -82,7 +82,7 @@ async def portal_recent_transactions(
 
 async def portal_simulate_transfer(
     body: SimulateFundingRequestSchema,
-    merchant: ValidPortalMerchant,
+    merchant: ValidActivePortalMerchant,
     service: Annotated[PortalService, Depends()],
 ) -> dict[str, Any]:
     _ = merchant

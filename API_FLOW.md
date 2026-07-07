@@ -15,7 +15,13 @@ Two auth modes depending on who is calling:
 
 Portal routes accept **either** the session cookie or a Bearer API key.
 
-Developer routes (`/customers`, `/accounts`, `/v1/*`, `/webhooks/register`) require a Bearer API key and a merchant with status **`active`**. New merchants start as `pending_kyb` until KYB is approved.
+While status is **`pending_kyb`** (before KYB submit), only these portal routes work:
+- `/auth/me`
+- `/portal/onboarding/*`
+
+Dashboard, settings, customers, transactions, file uploads, and simulate endpoints return **403** until KYB is submitted.
+
+Developer routes (`/customers`, `/accounts`, `/v1/*`, `/webhooks/register`) require a Bearer API key and merchant status **`active`**. Submitting KYB auto-activates the account.
 
 ---
 
@@ -106,7 +112,7 @@ All steps require portal auth (session cookie or Bearer key). Data is stored on 
 | Address | `/portal/onboarding/address` | PATCH | Address, phone, website |
 | Verification | `/portal/onboarding/verification` | PATCH | Director name, BVN, document URLs, consent |
 | Documents | `/portal/onboarding/documents` | POST | Upload CAC / proof files (multipart) |
-| Submit | `/portal/onboarding/submit` | POST | Submit KYB for review |
+| Submit | `/portal/onboarding/submit` | POST | Complete KYB and activate account |
 | Status | `/portal/onboarding/status` | GET | Checklist and current KYB state |
 
 ### Document upload
@@ -130,9 +136,18 @@ POST /portal/onboarding/submit
 
 Requires `business`, `address`, and `verification` steps to be completed first.
 
+On success:
+- Sets `status` to **`active`** (auto-approved)
+- Sets `kyb_data.submitted_at` and `kyb_data.approved_at`
+- Unlocks dashboard, settings, developer API, and all other portal routes
+
+Calling submit again when already active returns **422** `"KYB onboarding already completed"`.
+
 ---
 
 ## Step 3 — Portal settings
+
+Requires **`active`** merchant status (available after KYB submit).
 
 | Endpoint | Method | Purpose |
 |----------|--------|---------|
@@ -158,7 +173,7 @@ Requires `business`, `address`, and `verification` steps to be completed first.
 
 ## Step 4 — Dashboard (portal read APIs)
 
-Use after customers exist. Portal auth required.
+Requires **`active`** merchant status. Portal auth required.
 
 | Endpoint | Purpose |
 |----------|---------|
@@ -351,11 +366,10 @@ Error:
 ## Quick start checklist
 
 1. `POST /auth/register` — save API key and session cookie  
-2. Complete KYB via `/portal/onboarding/*` and `POST /portal/onboarding/submit`  
-3. Ensure merchant is **`active`** (required for developer API)  
-4. `PUT /portal/settings/webhook` — set your webhook URL  
-5. `POST /customers` — create customer + DVA  
-6. Share bank details with the end customer  
-7. Configure Nomba sandbox webhook → `https://your-api/hooks/nomba`  
-8. Test with `POST /portal/simulate-transfer` or a real sandbox transfer  
-9. Receive outbound events on your webhook URL  
+2. Complete KYB via `/portal/onboarding/*` and `POST /portal/onboarding/submit` (auto-activates account)  
+3. `PUT /portal/settings/webhook` — set your webhook URL  
+4. `POST /customers` — create customer + DVA  
+5. Share bank details with the end customer  
+6. Configure Nomba sandbox webhook → `https://your-api/hooks/nomba`  
+7. Test with `POST /portal/simulate-transfer` or a real sandbox transfer  
+8. Receive outbound events on your webhook URL  

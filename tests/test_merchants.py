@@ -81,9 +81,16 @@ async def test_get_merchant_from_bearer_valid_key() -> None:
     auth = AsyncMock()
     auth.credentials = "ldb_test_" + "b" * 64
 
-    with patch(
-        "app.api.security.merchant_auth.MerchantApiKey.filter",
-    ) as mock_filter:
+    with (
+        patch(
+            "app.api.security.merchant_auth.MerchantApiKey.filter",
+        ) as mock_filter,
+        patch(
+            "app.api.security.merchant_auth.Merchant.get",
+            new_callable=AsyncMock,
+            return_value=api_key.merchant,
+        ),
+    ):
         mock_qs = mock_filter.return_value
         mock_qs.select_related.return_value.first = AsyncMock(return_value=api_key)
         result = await get_merchant_from_bearer(auth)
@@ -112,6 +119,38 @@ async def test_get_merchant_from_bearer_invalid_key() -> None:
             await get_merchant_from_bearer(auth)
 
     assert exc_info.value.status == status.HTTP_401_UNAUTHORIZED
+
+
+@pytest.mark.asyncio
+async def test_get_merchant_from_bearer_pending_kyb() -> None:
+    from app.api.security.merchant_auth import get_merchant_from_bearer
+
+    merchant_id = uuid4()
+    api_key = AsyncMock()
+    api_key.merchant = AsyncMock()
+    api_key.merchant.id = merchant_id
+    api_key.merchant.status = MerchantStatus.PENDING_KYB
+
+    auth = AsyncMock()
+    auth.credentials = "ldb_test_" + "c" * 64
+
+    with (
+        patch(
+            "app.api.security.merchant_auth.MerchantApiKey.filter",
+        ) as mock_filter,
+        patch(
+            "app.api.security.merchant_auth.Merchant.get",
+            new_callable=AsyncMock,
+            return_value=api_key.merchant,
+        ),
+    ):
+        mock_qs = mock_filter.return_value
+        mock_qs.select_related.return_value.first = AsyncMock(return_value=api_key)
+        with pytest.raises(ErrorResponse) as exc_info:
+            await get_merchant_from_bearer(auth)
+
+    assert exc_info.value.status == status.HTTP_403_FORBIDDEN
+    assert "Complete KYB onboarding" in exc_info.value.message
 
 
 @pytest.mark.asyncio

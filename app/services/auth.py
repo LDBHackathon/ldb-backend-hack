@@ -164,6 +164,12 @@ class OnboardingService:
 
     async def submit(self, merchant_id: UUID) -> dict[str, Any]:
         merchant = await self._get_merchant(merchant_id)
+        if merchant.status == MerchantStatus.ACTIVE:
+            raise ErrorResponse(
+                status.HTTP_422_UNPROCESSABLE_CONTENT,
+                "KYB onboarding already completed",
+            )
+
         required = ("business", "address", "verification")
         missing = [step for step in required if step not in merchant.kyb_data]
         if missing:
@@ -174,12 +180,14 @@ class OnboardingService:
 
         from datetime import UTC, datetime
 
-        merchant.kyb_data["submitted_at"] = datetime.now(UTC).isoformat()
-        merchant.status = MerchantStatus.PENDING_KYB
+        now = datetime.now(UTC).isoformat()
+        merchant.kyb_data["submitted_at"] = now
+        merchant.kyb_data["approved_at"] = now
+        merchant.status = MerchantStatus.ACTIVE
         await merchant.save()
         return success_response(
             status.HTTP_200_OK,
-            "KYB submitted for review",
+            "KYB completed — account activated",
             data={"status": merchant.status, "kyb_data": merchant.kyb_data},
         )
 
