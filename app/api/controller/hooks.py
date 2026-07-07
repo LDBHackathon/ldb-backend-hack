@@ -9,6 +9,7 @@ from app.schemas.requests.filter import SimulateFundingRequestSchema
 from app.schemas.requests.webhooks import RegisterWebhookRequestSchema
 from app.services.webhook_forwarder import WebhookForwarderService
 from app.services.webhooks import NombaWebhookService
+from app.settings import settings
 from app.utils.logger import logger
 from app.utils.response_formatter import error_response, success_response
 
@@ -26,14 +27,18 @@ async def nomba_webhook(
     service: Annotated[NombaWebhookService, Depends()],
     nomba_signature: Annotated[str | None, Header(alias="nomba-signature")] = None,
     nomba_sig_value: Annotated[str | None, Header(alias="nomba-sig-value")] = None,
+    nomba_timestamp: Annotated[str | None, Header(alias="nomba-timestamp")] = None,
 ) -> dict[str, Any]:
     raw_body = await request.body()
-    signature = nomba_signature or nomba_sig_value
-    if not verify_nomba_signature(raw_body, signature):
-        logger.warning("Nomba webhook signature verification failed")
-        return error_response(status.HTTP_401_UNAUTHORIZED, "Invalid webhook signature")
-
     payload = json.loads(raw_body)
+    signature = nomba_signature or nomba_sig_value
+    if not verify_nomba_signature(payload, signature, nomba_timestamp):
+        logger.warning(
+            "Nomba webhook signature verification failed",
+            has_secret=bool(settings.NOMBA_WEBHOOK_SECRET),
+            has_timestamp=bool(nomba_timestamp),
+        )
+        return error_response(status.HTTP_401_UNAUTHORIZED, "Invalid webhook signature")
     logger.info(
         "Nomba webhook received",
         event_type=payload.get("event_type") or payload.get("eventType"),

@@ -297,11 +297,22 @@ sequenceDiagram
 
 ```http
 POST /hooks/nomba
-X-Nomba-Signature: ...
+nomba-signature: ...
+nomba-timestamp: 2025-09-29T10:51:44Z
 Content-Type: application/json
 ```
 
-Configure `NOMBA_WEBHOOK_SECRET` in your environment. Nomba sends `payment_success` events for virtual account transfers; LDB deduplicates by `requestId`, credits the customer wallet, and triggers outbound events.
+Configure `NOMBA_WEBHOOK_SECRET` with the **webhook signature key** from the Nomba dashboard (Developer → Webhook Setup). This is not the same as `NOMBA_CLIENT_SECRET`.
+
+LDB verifies each webhook by building a canonical signing string from the JSON payload and the `nomba-timestamp` header:
+
+```
+{event_type}:{requestId}:{merchant.userId}:{merchant.walletId}:{transaction.transactionId}:{transaction.type}:{transaction.time}:{transaction.responseCode}:{nomba-timestamp}
+```
+
+Then: `base64(HMAC-SHA256(NOMBA_WEBHOOK_SECRET, canonical_string))`, compared case-insensitively to `nomba-signature` (or `nomba-sig-value`).
+
+Nomba sends `payment_success` events for virtual account transfers; LDB deduplicates by `requestId`, credits the customer wallet, and triggers outbound events.
 
 ### Outbound — LDB → your server
 
