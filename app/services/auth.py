@@ -226,22 +226,34 @@ class OnboardingService:
 class SettingsService:
     """Settings / API Center for merchant dashboard."""
 
+    @staticmethod
+    def _mask_key_prefix(prefix: str | None) -> str | None:
+        """Return a masked preview to make clear this is not the full API key."""
+        if not prefix:
+            return None
+        if len(prefix) <= 8:
+            return f"{prefix}****"
+        return f"{prefix[:8]}****{prefix[-4:]}"
+
     async def get_credentials(self, merchant_id: UUID) -> dict[str, Any]:
         merchant = await Merchant.get(id=merchant_id)
         keys = await MerchantApiKey.filter(merchant_id=merchant_id).order_by(
             "-created_at"
         )
         active_key = next((k for k in keys if k.revoked_at is None), None)
+        active_prefix = active_key.key_prefix if active_key else None
         return success_response(
             status.HTTP_200_OK,
             "API credentials retrieved",
             data={
                 "public_key": f"pk_{'live' if merchant else 'test'}_wv_{str(merchant.id).replace('-', '')[:16]}",
-                "secret_key_prefix": active_key.key_prefix if active_key else None,
+                "secret_key_prefix": active_prefix,
+                "secret_key_masked_preview": self._mask_key_prefix(active_prefix),
                 "keys": [
                     {
                         "id": key.id,
                         "prefix": key.key_prefix,
+                        "masked_preview": self._mask_key_prefix(key.key_prefix),
                         "name": key.name,
                         "created_at": key.created_at,
                         "revoked_at": key.revoked_at,
