@@ -44,14 +44,6 @@ async def test_dva_provisioning_persists_account() -> None:
             return_value=created_customer,
         ),
         patch(
-            "app.services.customers.NombaSubAccountService.create",
-            new_callable=AsyncMock,
-            return_value={
-                "success": True,
-                "data": {"account_id": "sub-acct-1", "account_ref": "a" * 32},
-            },
-        ),
-        patch(
             "app.services.customers.NombaVirtualAccountService.create",
             new_callable=AsyncMock,
             return_value={
@@ -93,6 +85,7 @@ async def test_dva_provisioning_sub_account_failure_returns_pending() -> None:
     created_customer = AsyncMock()
     created_customer.id = uuid4()
     created_customer.status = CustomerStatus.PENDING_NOMBA
+    created_customer.nomba_sub_account_id = None
     created_customer.delete = AsyncMock()
 
     with (
@@ -104,11 +97,6 @@ async def test_dva_provisioning_sub_account_failure_returns_pending() -> None:
             "app.services.customers.Customer.create",
             new_callable=AsyncMock,
             return_value=created_customer,
-        ),
-        patch(
-            "app.services.customers.NombaSubAccountService.create",
-            new_callable=AsyncMock,
-            return_value={"success": False, "message": "Forbidden", "status_code": 403},
         ),
         patch(
             "app.services.customers.build_customer_response",
@@ -133,6 +121,7 @@ async def test_dva_provisioning_missing_sub_account_id_returns_pending() -> None
     created_customer = AsyncMock()
     created_customer.id = uuid4()
     created_customer.status = CustomerStatus.PENDING_NOMBA
+    created_customer.nomba_sub_account_id = None
     created_customer.delete = AsyncMock()
     created_customer.nomba_sub_account_ref = "a" * 32
     created_customer.save = AsyncMock()
@@ -146,11 +135,6 @@ async def test_dva_provisioning_missing_sub_account_id_returns_pending() -> None
             "app.services.customers.Customer.create",
             new_callable=AsyncMock,
             return_value=created_customer,
-        ),
-        patch(
-            "app.services.customers.NombaSubAccountService.create",
-            new_callable=AsyncMock,
-            return_value={"success": True, "data": {}},
         ),
         patch(
             "app.services.customers.build_customer_response",
@@ -185,14 +169,6 @@ async def test_dva_provisioning_va_failure_keeps_customer_pending() -> None:
             "app.services.customers.Customer.create",
             new_callable=AsyncMock,
             return_value=created_customer,
-        ),
-        patch(
-            "app.services.customers.NombaSubAccountService.create",
-            new_callable=AsyncMock,
-            return_value={
-                "success": True,
-                "data": {"account_id": "sub-acct-1"},
-            },
         ),
         patch(
             "app.services.customers.NombaVirtualAccountService.create",
