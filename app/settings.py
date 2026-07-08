@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from pydantic import Field, PostgresDsn
+from pydantic import Field, PostgresDsn, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -29,6 +29,13 @@ class EnvSettings(BaseSettings):
     NOMBA_SUB_ACCOUNT_ID: str = ""  # Your sub-account ID for scoped calls
     NOMBA_BASE_URL: str = "https://sandbox.nomba.com"
     NOMBA_WEBHOOK_SECRET: str = ""
+
+    @field_validator("NOMBA_WEBHOOK_SECRET", mode="before")
+    @classmethod
+    def strip_webhook_secret(cls, value: object) -> object:
+        if isinstance(value, str):
+            return value.strip()
+        return value
 
     SESSION_COOKIE_NAME: str = "ldb_session"
     SESSION_JWT_EXPIRY_HOURS: int = Field(default=24, ge=1, le=168)
