@@ -74,7 +74,7 @@ class CustomerService:
             )
             return success_response(
                 status.HTTP_201_CREATED,
-                "Customer created; link Nomba sub-account to complete provisioning",
+                "Customer created; Nomba provisioning incomplete (sub-account creation failed). Link a Nomba sub-account to complete provisioning.",
                 data=await build_customer_response(customer),
             )
 
@@ -90,7 +90,7 @@ class CustomerService:
             )
             return success_response(
                 status.HTTP_201_CREATED,
-                "Customer created; Nomba sub-account response missing account ID",
+                "Customer created; Nomba provisioning incomplete (missing sub-account ID in response). Link a Nomba sub-account to complete provisioning.",
                 data=await build_customer_response(customer),
             )
 

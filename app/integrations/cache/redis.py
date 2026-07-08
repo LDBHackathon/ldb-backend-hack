@@ -3,12 +3,23 @@ import redis.asyncio
 
 from app.settings import settings
 
+_REDIS_POOL_OPTIONS = {
+    "decode_responses": True,
+    "health_check_interval": 30,
+    "socket_keepalive": True,
+    "socket_connect_timeout": 5,
+    "socket_timeout": 5,
+    "retry_on_timeout": True,
+}
+
 redis_pool = redis.asyncio.ConnectionPool.from_url(  # type: ignore
-    settings.REDIS_URL, decode_responses=True
+    settings.REDIS_URL,
+    **_REDIS_POOL_OPTIONS,
 )
 
 sync_redis_pool = redis.ConnectionPool.from_url(  # type: ignore
-    settings.REDIS_URL, decode_responses=True
+    settings.REDIS_URL,
+    **_REDIS_POOL_OPTIONS,
 )
 
 

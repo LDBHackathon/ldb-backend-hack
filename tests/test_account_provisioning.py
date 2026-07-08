@@ -120,6 +120,49 @@ async def test_dva_provisioning_sub_account_failure_returns_pending() -> None:
 
     assert result["status"] == "success"
     assert result["status_code"] == 201
+    assert "Nomba provisioning incomplete" in result["message"]
+    created_customer.delete.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_dva_provisioning_missing_sub_account_id_returns_pending() -> None:
+    merchant_id = uuid4()
+    body = CreateCustomerRequestSchema(name="Pending User")
+    service = CustomerService()
+
+    created_customer = AsyncMock()
+    created_customer.id = uuid4()
+    created_customer.status = CustomerStatus.PENDING_NOMBA
+    created_customer.delete = AsyncMock()
+    created_customer.nomba_sub_account_ref = "a" * 32
+    created_customer.save = AsyncMock()
+
+    with (
+        patch(
+            "app.services.customers.generate_merchant_customer_id",
+            return_value="generated-customer-ref",
+        ),
+        patch(
+            "app.services.customers.Customer.create",
+            new_callable=AsyncMock,
+            return_value=created_customer,
+        ),
+        patch(
+            "app.services.customers.NombaSubAccountService.create",
+            new_callable=AsyncMock,
+            return_value={"success": True, "data": {}},
+        ),
+        patch(
+            "app.services.customers.build_customer_response",
+            new_callable=AsyncMock,
+            return_value={"status": CustomerStatus.PENDING_NOMBA},
+        ),
+    ):
+        result = await service.create(body, merchant_id=merchant_id)
+
+    assert result["status"] == "success"
+    assert result["status_code"] == 201
+    assert "Nomba provisioning incomplete" in result["message"]
     created_customer.delete.assert_not_awaited()
 
 
