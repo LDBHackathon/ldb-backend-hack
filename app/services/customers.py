@@ -39,12 +39,39 @@ class CustomerService:
             nomba_sub_account_ref=sub_account_ref,
             status=CustomerStatus.PENDING_NOMBA,
         )
+        print(
+            "[CUSTOMER_CREATE][START]",
+            {
+                "customer_id": str(customer.id),
+                "merchant_id": str(merchant_id),
+                "merchant_customer_id": merchant_customer_id,
+                "sub_account_ref": sub_account_ref,
+                "name": body.name,
+            },
+        )
 
         sub_result = await NombaSubAccountService.create(
             account_name=body.name,
             account_ref=sub_account_ref,
         )
+        print(
+            "[CUSTOMER_CREATE][SUB_ACCOUNT_RESULT]",
+            {
+                "customer_id": str(customer.id),
+                "success": sub_result.get("success"),
+                "status_code": sub_result.get("status_code"),
+                "message": sub_result.get("message"),
+            },
+        )
         if not sub_result["success"]:
+            print(
+                "[CUSTOMER_CREATE][FALLBACK_NO_SUB_ACCOUNT]",
+                {
+                    "customer_id": str(customer.id),
+                    "reason": "sub-account creation failed",
+                    "next_action": "link Nomba sub-account later via /customers/{customer_id}/link-nomba-sub-account",
+                },
+            )
             return success_response(
                 status.HTTP_201_CREATED,
                 "Customer created; link Nomba sub-account to complete provisioning",
@@ -54,6 +81,13 @@ class CustomerService:
         sub_data = sub_result["data"] or {}
         sub_account_id = sub_data.get("account_id")
         if not sub_account_id:
+            print(
+                "[CUSTOMER_CREATE][FALLBACK_MISSING_SUB_ACCOUNT_ID]",
+                {
+                    "customer_id": str(customer.id),
+                    "sub_result_data": sub_data,
+                },
+            )
             return success_response(
                 status.HTTP_201_CREATED,
                 "Customer created; Nomba sub-account response missing account ID",
@@ -62,8 +96,24 @@ class CustomerService:
 
         customer.nomba_sub_account_id = sub_account_id
         await customer.save()
+        print(
+            "[CUSTOMER_CREATE][SUB_ACCOUNT_LINKED]",
+            {
+                "customer_id": str(customer.id),
+                "nomba_sub_account_id": sub_account_id,
+            },
+        )
 
         provisioned = await self._provision_virtual_account(customer, body)
+        print(
+            "[CUSTOMER_CREATE][VA_PROVISION_RESULT]",
+            {
+                "customer_id": str(customer.id),
+                "success": not bool(provisioned.get("error")),
+                "error": provisioned.get("error"),
+                "detail": provisioned.get("detail"),
+            },
+        )
         if provisioned.get("error"):
             logger.warning(
                 "Virtual account provisioning failed after sub-account creation",

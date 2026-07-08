@@ -37,7 +37,25 @@ class NombaSubAccountService:
         try:
             headers = await NombaAuthService.auth_headers()
             async with httpx.AsyncClient(timeout=30.0) as client:
+                print(
+                    "[NOMBA][SUB_ACCOUNT_CREATE][REQUEST]",
+                    {
+                        "url": url,
+                        "account_ref": account_ref,
+                        "account_name": payload.get("accountName"),
+                        "account_id_header": settings.NOMBA_ACCOUNT_ID,
+                        "authorization_header_present": bool(headers.get("Authorization")),
+                    },
+                )
                 response = await client.post(url, json=payload, headers=headers)
+                print(
+                    "[NOMBA][SUB_ACCOUNT_CREATE][HTTP_RESPONSE]",
+                    {
+                        "status_code": response.status_code,
+                        "account_ref": account_ref,
+                        "response_body": response.text,
+                    },
+                )
                 response.raise_for_status()
                 body = response.json()
                 parsed = _parse_sub_account_response(body.get("data", body))
