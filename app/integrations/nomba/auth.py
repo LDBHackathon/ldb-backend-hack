@@ -63,6 +63,15 @@ class NombaAuthService:
         try:
             async with httpx.AsyncClient(timeout=30.0) as client:
                 response = await client.post(url, json=payload, headers=headers)
+                print(
+                    "[NOMBA][TOKEN][HTTP_RESPONSE]",
+                    {
+                        "url": url,
+                        "status_code": response.status_code,
+                        "account_id_header": settings.NOMBA_ACCOUNT_ID,
+                        "response_body": response.text,
+                    },
+                )
                 response.raise_for_status()
                 body = response.json()
                 token_data = body.get("data", body)
@@ -87,6 +96,15 @@ class NombaAuthService:
                     "status_code": response.status_code,
                 }
         except httpx.HTTPStatusError as exc:
+            print(
+                "[NOMBA][TOKEN][HTTP_ERROR]",
+                {
+                    "url": str(exc.request.url),
+                    "status_code": exc.response.status_code,
+                    "account_id_header": settings.NOMBA_ACCOUNT_ID,
+                    "response_body": exc.response.text,
+                },
+            )
             return {
                 "success": False,
                 "data": None,
@@ -94,6 +112,14 @@ class NombaAuthService:
                 "message": exc.response.text,
             }
         except httpx.HTTPError as exc:
+            print(
+                "[NOMBA][TOKEN][NETWORK_ERROR]",
+                {
+                    "url": url,
+                    "account_id_header": settings.NOMBA_ACCOUNT_ID,
+                    "error": str(exc),
+                },
+            )
             return {
                 "success": False,
                 "data": None,
