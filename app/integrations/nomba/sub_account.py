@@ -59,18 +59,40 @@ class NombaSubAccountService:
                 "message": str(exc),
             }
         except httpx.HTTPStatusError as exc:
+            response_text = exc.response.text
             logger.warning(
                 "Nomba sub-account creation failed",
                 account_ref=account_ref,
                 status_code=exc.response.status_code,
             )
+            print(
+                "[NOMBA][SUB_ACCOUNT_CREATE][HTTP_ERROR]",
+                {
+                    "url": str(exc.request.url),
+                    "status_code": exc.response.status_code,
+                    "account_ref": account_ref,
+                    "account_name": payload.get("accountName"),
+                    "account_id_header": settings.NOMBA_ACCOUNT_ID,
+                    "response_body": response_text,
+                },
+            )
             return {
                 "success": False,
                 "data": None,
                 "status_code": exc.response.status_code,
-                "message": exc.response.text,
+                "message": response_text,
             }
         except httpx.HTTPError as exc:
+            print(
+                "[NOMBA][SUB_ACCOUNT_CREATE][NETWORK_ERROR]",
+                {
+                    "url": url,
+                    "account_ref": account_ref,
+                    "account_name": payload.get("accountName"),
+                    "account_id_header": settings.NOMBA_ACCOUNT_ID,
+                    "error": str(exc),
+                },
+            )
             return {
                 "success": False,
                 "data": None,
