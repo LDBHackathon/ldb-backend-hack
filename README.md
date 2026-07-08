@@ -11,7 +11,7 @@ API backend for the LDB × Nomba hackathon. It lets merchants onboard, provision
 - **Outbound webhooks** — notify merchant systems (`wallet.credited`, `payment.partial`, etc.)
 - **File storage** — KYB document uploads via Cloudinary
 
-## Tech stack
+## Tech stack   
 
 - Python 3.14, FastAPI, Tortoise ORM (PostgreSQL)
 - Redis (rate limiting, Nomba token cache)
