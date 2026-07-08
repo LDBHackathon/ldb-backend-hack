@@ -18,6 +18,19 @@ class NombaVirtualAccountService:
     """Nomba dedicated virtual account API client."""
 
     @classmethod
+    def _extract_nomba_error(cls, body: dict[str, Any]) -> str | None:
+        """Return business-level API error when Nomba responds with non-success payload."""
+        code = str(body.get("code", "")).strip()
+        status_flag = body.get("status")
+        if code in {"00", "0"} and status_flag in {True, None}:
+            return None
+        if "message" in body and body["message"]:
+            return str(body["message"])
+        if "description" in body and body["description"]:
+            return str(body["description"])
+        return None
+
+    @classmethod
     def _create_url(cls, sub_account_id: str | None = None) -> str:
         base = f"{settings.NOMBA_BASE_URL.rstrip('/')}/v1/accounts/virtual"
         if sub_account_id:
@@ -56,6 +69,21 @@ class NombaVirtualAccountService:
                 response = await client.post(url, json=payload, headers=headers)
                 response.raise_for_status()
                 body = response.json()
+                body_error = cls._extract_nomba_error(body)
+                if body_error:
+                    logger.warning(
+                        "Nomba virtual account creation rejected",
+                        account_ref=account_ref,
+                        status_code=response.status_code,
+                        account_id_header=headers.get("accountId"),
+                        response_body=body,
+                    )
+                    return {
+                        "success": False,
+                        "data": None,
+                        "status_code": response.status_code,
+                        "message": body_error,
+                    }
                 parsed = parse_virtual_account_response(body.get("data", body))
                 logger.info(
                     "Nomba virtual account created",
@@ -79,6 +107,7 @@ class NombaVirtualAccountService:
                 "Nomba virtual account creation failed",
                 account_ref=account_ref,
                 status_code=exc.response.status_code,
+                account_id_header=settings.NOMBA_ACCOUNT_ID,
             )
             return {
                 "success": False,

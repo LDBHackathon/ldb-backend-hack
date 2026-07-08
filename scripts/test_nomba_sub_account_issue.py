@@ -1,4 +1,4 @@
-"""Reproduce and diagnose Nomba sub-account creation failures.
+"""Reproduce and diagnose Nomba virtual-account provisioning failures.
 
 Usage:
   python scripts/test_nomba_sub_account_issue.py
@@ -86,16 +86,17 @@ async def _issue_token(
     return token, parsed
 
 
-async def _create_sub_account(
+async def _create_virtual_account(
     client: httpx.AsyncClient,
     *,
     base_url: str,
     account_id: str,
+    sub_account_id: str,
     token: str,
     account_name: str,
     account_ref: str,
 ) -> dict:
-    url = f"{base_url}/v1/accounts/sub-account"
+    url = f"{base_url}/v1/accounts/virtual/{sub_account_id}"
     headers = {
         "Authorization": f"Bearer {token}",
         "Content-Type": "application/json",
@@ -116,15 +117,15 @@ async def _create_sub_account(
         "payload": payload,
         "response_body": parsed,
     }
-    _log("[SUB_ACCOUNT_CREATE]", result)
+    _log("[VIRTUAL_ACCOUNT_CREATE]", result)
     return result
 
 
 async def main() -> int:
-    parser = argparse.ArgumentParser(description="Diagnose Nomba sub-account create failures.")
+    parser = argparse.ArgumentParser(description="Diagnose Nomba virtual-account create failures.")
     parser.add_argument("--env-file", default=".env", help="Env file path (default: .env)")
     parser.add_argument("--attempts", type=int, default=1, help="Number of create attempts")
-    parser.add_argument("--name", default="LDB Debug Account", help="Sub-account name")
+    parser.add_argument("--name", default="LDB Debug Account", help="Virtual account name")
     parser.add_argument(
         "--base-url",
         default="",
@@ -136,6 +137,7 @@ async def main() -> int:
 
     base_url = (args.base_url or _required_env("NOMBA_BASE_URL")).rstrip("/")
     account_id = _required_env("NOMBA_ACCOUNT_ID")
+    sub_account_id = _required_env("NOMBA_SUB_ACCOUNT_ID")
     client_id = _required_env("NOMBA_CLIENT_ID")
     client_secret = _required_env("NOMBA_CLIENT_SECRET")
 
@@ -144,6 +146,7 @@ async def main() -> int:
         {
             "base_url": base_url,
             "account_id": account_id,
+            "sub_account_id": sub_account_id,
             "client_id_prefix": client_id[:8],
             "attempts": args.attempts,
             "timestamp_utc": datetime.now(UTC).isoformat(),
@@ -166,16 +169,21 @@ async def main() -> int:
         failures = 0
         for idx in range(args.attempts):
             account_ref = uuid4().hex
-            account_name = f"{args.name[:50]}-{idx + 1}"
-            result = await _create_sub_account(
+            account_name = args.name[:50] if args.attempts == 1 else f"{args.name[:48]}{idx + 1}"
+            result = await _create_virtual_account(
                 client,
                 base_url=base_url,
                 account_id=account_id,
+                sub_account_id=sub_account_id,
                 token=token,
                 account_name=account_name,
                 account_ref=account_ref,
             )
-            if not result["ok"]:
+            body = result.get("response_body")
+            body_code = str(body.get("code")) if isinstance(body, dict) and body.get("code") is not None else ""
+            body_status = body.get("status") if isinstance(body, dict) else None
+            is_business_failure = body_code not in {"", "00", "0"} or body_status is False
+            if (not result["ok"]) or is_business_failure:
                 failures += 1
 
         _log(
