@@ -10,9 +10,6 @@ on:
       - dev
       - main
 
-env:
-  DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
-
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -38,28 +35,44 @@ jobs:
     needs: test
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image_owner: ${{ steps.owner.outputs.name }}
 
     steps:
       - name: Check out code
         uses: actions/checkout@v4
 
-      - name: Login to Docker Hub
+      - name: Resolve image owner
+        id: owner
+        run: echo "name=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
+
+      - name: Login to GHCR
         uses: docker/login-action@v3
         with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build, tag and push (Development)
         if: github.ref == 'refs/heads/dev'
         run: |
-          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/ldb-dva-be-dev:latest-dev .
-          docker push ${{ secrets.DOCKERHUB_USERNAME }}/ldb-dva-be-dev:latest-dev
+          IMAGE="ghcr.io/${{ steps.owner.outputs.name }}/ldb-dva-be-dev:latest-dev"
+          docker build \
+            --label "org.opencontainers.image.source=https://github.com/${{ github.repository }}" \
+            -t "$IMAGE" .
+          docker push "$IMAGE"
 
       - name: Build, tag and push (Production)
         if: github.ref == 'refs/heads/main'
         run: |
-          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/ldb-dva-be:latest .
-          docker push ${{ secrets.DOCKERHUB_USERNAME }}/ldb-dva-be:latest
+          IMAGE="ghcr.io/${{ steps.owner.outputs.name }}/ldb-dva-be:latest"
+          docker build \
+            --label "org.opencontainers.image.source=https://github.com/${{ github.repository }}" \
+            -t "$IMAGE" .
+          docker push "$IMAGE"
 
   deploy-dev:
     name: Deploy to Development
@@ -89,10 +102,10 @@ jobs:
           password: ${{ secrets.DO_PASSWORD_DEV }}
           port: 22
           script: |
-            docker login -u ${{ secrets.DOCKERHUB_USERNAME }} -p ${{ secrets.DOCKERHUB_TOKEN }}
-            docker pull ${{ secrets.DOCKERHUB_USERNAME }}/ldb-dva-be-dev:latest-dev
+            echo "${{ secrets.GHCR_READ_TOKEN }}" | docker login ghcr.io -u "${{ secrets.GHCR_USERNAME }}" --password-stdin
+            docker pull ghcr.io/${{ needs.build.outputs.image_owner }}/ldb-dva-be-dev:latest-dev
 
-            sed -i "s|^\([[:space:]]*\)build:.*|\1image: ${{ secrets.DOCKERHUB_USERNAME }}/ldb-dva-be-dev:latest-dev|" docker-compose.dev.yml
+            sed -i "s|^\([[:space:]]*\)build:.*|\1image: ghcr.io/${{ needs.build.outputs.image_owner }}/ldb-dva-be-dev:latest-dev|" docker-compose.dev.yml
 
             docker network create ldb-dva-internal-dev || true
 
@@ -129,10 +142,10 @@ jobs:
           password: ${{ secrets.DO_PASSWORD_PROD }}
           port: 22
           script: |
-            docker login -u ${{ secrets.DOCKERHUB_USERNAME }} -p ${{ secrets.DOCKERHUB_TOKEN }}
-            docker pull ${{ secrets.DOCKERHUB_USERNAME }}/ldb-dva-be:latest
+            echo "${{ secrets.GHCR_READ_TOKEN }}" | docker login ghcr.io -u "${{ secrets.GHCR_USERNAME }}" --password-stdin
+            docker pull ghcr.io/${{ needs.build.outputs.image_owner }}/ldb-dva-be:latest
 
-            sed -i "s|^\([[:space:]]*\)build:.*|\1image: ${{ secrets.DOCKERHUB_USERNAME }}/ldb-dva-be:latest|" docker-compose.prod.yml
+            sed -i "s|^\([[:space:]]*\)build:.*|\1image: ghcr.io/${{ needs.build.outputs.image_owner }}/ldb-dva-be:latest|" docker-compose.prod.yml
 
             docker network create ldb-dva-internal-prod || true
 
